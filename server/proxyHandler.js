@@ -1,29 +1,68 @@
-const fetch = require('node-fetch');
-const { rewriteHTML } = require('./urlRewriter');
-const { setCORSHeaders } = require('./corsHeaders');
+import fetch from 'node-fetch';
+import { logInfo, logError } from './utils.js';
 
-async function handleProxy(req, res) {
-  const targetURL = req.query.url;
-  if (!targetURL) return res.status(400).send('Missing URL');
+const DEFAULT_HEADERS = {
+  'User-Agent': 'SUB-Recoded-V2-Proxy/2.0',
+  'Accept': '*/*',
+  'Accept-Encoding': 'gzip, deflate, br'
+};
 
-  setCORSHeaders(res);
-
-  try {
-    const response = await fetch(targetURL);
-    const contentType = response.headers.get('content-type');
-
-    if (contentType && contentType.includes('text/html')) {
-      let html = await response.text();
-      html = rewriteHTML(html, targetURL);
-      res.send(html);
-    } else {
-      const buffer = await response.buffer();
-      res.setHeader('Content-Type', contentType || 'application/octet-stream');
-      res.send(buffer);
-    }
-  } catch (err) {
-    res.status(500).send('Proxy error');
+function sanitizeHeaders(headers) {
+  const sanitized = {};
+  for (const [key, value] of headers.entries()) {
+    if (key.toLowerCase() === 'content-security-policy') continue;
+    if (key.toLowerCase() === 'x-frame-options') continue;
+    sanitized[key] = value;
   }
+  return sanitized;
 }
 
-module.exports = { handleProxy };
+function isHTML(contentType) {
+  return contentType && contentType.includes('text/html');
+}
+
+function isRedirect(status) {
+  return status >= 300 && status < 400;
+}
+
+function resolveRedirectLocation(headers) {
+  return headers.get('location') || '';
+}
+
+export default async function proxyHandler(targetUrl) {
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      headers: DEFAULT_HEADERS,
+      redirect: 'follow'
+    });
+
+    const status = response.status;
+    const headers = sanitizeHeaders(response.headers);
+    const contentType = headers['content-type'] || '';
+
+    if (isRedirect(status)) {
+      const location = resolveRedirectLocation(response.headers);
+      logInfo(`Redirect detected: ${location}`);
+      return {
+        body: `<html><head><meta http-equiv="refresh" content="0;url=${location}"></head></html>`,
+        headers: { 'content-type': 'text/html' }
+      };
+    }
+
+    let body = '';
+    if (isHTML(contentType)) {
+      body = await response.text();
+    } else {
+      const buffer = await response.buffer();
+      body = buffer.toString('base64');
+      headers['content-transfer-encoding'] = 'base64';
+    }
+
+    logInfo(`Fetched ${targetUrl} [${status}]`);
+    return { body, headers };
+  } catch (err) {
+    logError(`Proxy fetch failed: ${err.message}`);
+    throw new Error('Failed to fetch target URL');
+  }
+}
