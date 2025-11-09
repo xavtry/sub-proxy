@@ -1,1 +1,78 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUB Recoded V2</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #f2f2f2; }
+    #tabBar {
+      display: flex;
+      background: #e0e0e0;
+      padding: 5px;
+      overflow-x: auto;
+    }
+    .tab {
+      padding: 8px 12px;
+      background: #ccc;
+      margin-right: 5px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .tab.active { background: #fff; font-weight: bold; }
+    #newTabBtn {
+      padding: 8px 12px;
+      background: #aaa;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #home {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: calc(100vh - 40px);
+    }
+    #logo {
+      font-size: 2em;
+      margin-bottom: 20px;
+    }
+    #searchBar {
+      display: flex;
+      width: 50%;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 10px;
+      font-size: 1em;
+    }
+    #searchBtn {
+      padding: 10px;
+      font-size: 1em;
+    }
+    iframe {
+      width: 100%;
+      height: calc(100vh - 40px);
+      border: none;
+      display: none;
+    }
+    iframe.active { display: block; }
+  </style>
+</head>
+<body>
+  <div id="tabBar">
+    <div id="newTabBtn">+</div>
+  </div>
+  <div id="home">
+    <div id="logo">SUB Recoded V2</div>
+    <div id="searchBar">
+      <input type="text" id="searchInput" placeholder="Search the web..." />
+      <button id="searchBtn">Search</button>
+    </div>
+  </div>
+  <div id="iframeContainer"></div>
+
+  <script src="src/main.js"></script>
+</body>
+</html>
