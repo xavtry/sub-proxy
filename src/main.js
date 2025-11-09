@@ -1,10 +1,10 @@
-import { createTab, switchTab, getActiveTabId, closeTab, restoreTabs } from './tabManager.js';
+import { createTab, switchTab, getActiveTabId, closeTab, restoreTabs, getAllTabs } from './tabManager.js';
 import { loadSearch } from './searchHandler.js';
-import { bindUIEvents, showHomeScreen, hideHomeScreen } from './ui.js';
-import { log, logError } from './logger.js';
+import { bindUIEvents, showHomeScreen, hideHomeScreen, updateTabBar } from './ui.js';
+import { log, logError, logInfo } from './logger.js';
 import { saveSession, loadSession } from './session.js';
-import { applySettings } from './settingsPanel.js';
-import { showErrorOverlay } from './errorOverlay.js';
+import { applySettings, getSettings } from './settingsPanel.js';
+import { showErrorOverlay, hideErrorOverlay } from './errorOverlay.js';
 
 let initialized = false;
 
@@ -12,22 +12,27 @@ function initApp() {
   if (initialized) return;
   initialized = true;
 
-  log('Initializing SUB Recoded V2...');
+  logInfo('Initializing SUB Recoded V2...');
 
   bindUIEvents({
     onNewTab: handleNewTab,
     onSearch: handleSearch,
     onCloseTab: handleCloseTab,
-    onSettingsChange: applySettings
+    onSwitchTab: handleSwitchTab,
+    onSettingsChange: handleSettingsChange
   });
 
-  restoreTabs();
-  if (!getActiveTabId()) {
+  const savedTabs = loadSession();
+  if (savedTabs && savedTabs.length > 0) {
+    restoreTabs(savedTabs);
+    switchTab(savedTabs[0].id);
+    hideHomeScreen();
+  } else {
     handleNewTab();
     showHomeScreen();
   }
 
-  log('App initialized.');
+  logInfo('App initialized.');
 }
 
 function handleNewTab() {
@@ -35,6 +40,7 @@ function handleNewTab() {
     const tabId = createTab();
     switchTab(tabId);
     showHomeScreen();
+    updateTabBar();
     log(`New tab created: ${tabId}`);
   } catch (err) {
     logError('Failed to create new tab');
@@ -49,6 +55,11 @@ function handleSearch(query) {
       logError('No active tab for search');
       return;
     }
+    if (!query || query.trim().length === 0) {
+      logError('Empty search query');
+      return;
+    }
+
     hideHomeScreen();
     loadSearch(tabId, query);
     saveSession(tabId, query);
@@ -63,8 +74,13 @@ function handleCloseTab(tabId) {
   try {
     closeTab(tabId);
     log(`Tab closed: ${tabId}`);
-    if (!getActiveTabId()) {
+    updateTabBar();
+
+    const remainingTabs = getAllTabs();
+    if (remainingTabs.length === 0) {
       handleNewTab();
+    } else {
+      switchTab(remainingTabs[0].id);
     }
   } catch (err) {
     logError(`Failed to close tab: ${tabId}`);
@@ -72,9 +88,43 @@ function handleCloseTab(tabId) {
   }
 }
 
+function handleSwitchTab(tabId) {
+  try {
+    switchTab(tabId);
+    hideHomeScreen();
+    log(`Switched to tab: ${tabId}`);
+  } catch (err) {
+    logError(`Failed to switch tab: ${tabId}`);
+    showErrorOverlay('Could not switch tab.');
+  }
+}
+
+function handleSettingsChange(newSettings) {
+  try {
+    applySettings(newSettings);
+    log(`Settings updated: ${JSON.stringify(newSettings)}`);
+  } catch (err) {
+    logError('Failed to apply settings');
+    showErrorOverlay('Settings update failed.');
+  }
+}
+
+function handleGlobalErrors() {
+  window.onerror = (msg, src, line, col, err) => {
+    logError(`Global error: ${msg} at ${src}:${line}:${col}`);
+    showErrorOverlay('An unexpected error occurred.');
+  };
+
+  window.onunhandledrejection = (event) => {
+    logError(`Unhandled promise rejection: ${event.reason}`);
+    showErrorOverlay('Something went wrong.');
+  };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   try {
     initApp();
+    handleGlobalErrors();
   } catch (err) {
     logError('App failed to initialize');
     showErrorOverlay('Initialization error.');
